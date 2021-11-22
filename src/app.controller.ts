@@ -6,22 +6,22 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get('plans')
-  getPlans() {
+  async getPlans() {
     return this.appService.getPlans();
   }
 
   @Get('payment-methods')
-  getPaymentMethods(@Query('storeId') storeId?: string) {
+  async getPaymentMethods(@Query('storeId') storeId?: string) {
     return this.appService.getPaymentMethods(storeId);
   }
 
   @Get('anti-fraud')
-  getAntiFraudInfo() {
+  async getAntiFraudInfo() {
     return this.appService.getAntiFraudInfo();
   }
 
   @Get('features')
-  getFeatures() {
+  async getFeatures() {
     return this.appService.getFeatures();
   }
 }

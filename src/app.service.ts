@@ -1,54 +1,80 @@
-import { Injectable } from '@nestjs/common';
+import * as crypto from 'crypto';
+import { Inject, Injectable } from '@nestjs/common';
+import { LDClient } from 'launchdarkly-node-server-sdk';
+import {
+  LAUNCHDARKLY_PROVIDER,
+  LAUNCHDARKLY_DEFAULT_USER as USER,
+} from './constants';
 
 @Injectable()
 export class AppService {
-  getPlans(): Record<string, boolean> {
-    // check for flag "freePlanEnabled"
-    const freePlan = true;
+  constructor(
+    @Inject(LAUNCHDARKLY_PROVIDER) private readonly ldClient: LDClient,
+  ) {}
+
+  async getPlans(): Promise<Record<string, boolean>> {
+    const freePlan = await this.ldClient.variation(
+      'freePlanEnabled',
+      USER,
+      false,
+    );
 
     return {
-      free: freePlan,
+      free: freePlan || undefined,
       startup: true,
       pro: true,
       enterprise: true,
     };
   }
 
-  getPaymentMethods(storeId?: string): Record<string, boolean> {
-    // check for flag "pixEnabled"
-    const pixEnabled = true;
+  async getPaymentMethods(storeId?: string): Promise<Record<string, boolean>> {
+    const user = storeId ? { key: storeId } : USER;
+    const pixEnabled = await this.ldClient.variation('pixEnabled', user, false);
 
     return {
-      pix: pixEnabled,
+      pix: pixEnabled || undefined,
       creditCard: true,
       slip: true,
     };
   }
 
-  getAntiFraudInfo(): Record<string, boolean | string[]> {
-    // check for flag "antiFraudEnabled"
-    const isEnabled = true;
+  async getAntiFraudInfo(): Promise<Record<string, boolean | string[]>> {
+    const isEnabled = await this.ldClient.variation(
+      'antiFraudEnabled',
+      USER,
+      false,
+    );
 
-    if (isEnabled) {
+    if (!isEnabled) {
       return {
         enabled: false,
         engines: null,
       };
     }
 
-    // check for flag/variant "antiFraudEngine" if possible
-    const engines = ['clearsale', 'legiti', 'konduto'];
+    const { engines } = await this.ldClient.variation(
+      'antiFraudEngine',
+      {
+        key: crypto
+          .createHash('md5')
+          .update(Date.now().toString())
+          .digest('hex'),
+      },
+      { engines: null },
+    );
 
     return {
-      enabled: true,
+      enabled: !!engines,
       engines,
     };
   }
 
-  getFeatures() {
-    const plans = this.getPlans();
-    const paymentMethods = this.getPaymentMethods();
-    const antiFraud = this.getAntiFraudInfo();
+  async getFeatures() {
+    const [plans, paymentMethods, antiFraud] = await Promise.all([
+      this.getPlans(),
+      this.getPaymentMethods(),
+      this.getAntiFraudInfo(),
+    ]);
 
     return { plans, paymentMethods, antiFraud };
   }
