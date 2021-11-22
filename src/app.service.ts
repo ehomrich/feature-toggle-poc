@@ -1,13 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import * as crypto from 'crypto';
+import { Inject, Injectable } from '@nestjs/common';
+import { IClient } from '@splitsoftware/splitio/types/splitio';
+import { SPLIT_PROVIDER, SPLIT_DEFAULT_USER_KEY as KEY } from './constants';
 
 @Injectable()
 export class AppService {
+  constructor(@Inject(SPLIT_PROVIDER) private readonly splitClient: IClient) {}
+
   getPlans(): Record<string, boolean> {
-    // check for flag "freePlanEnabled"
-    const freePlan = true;
+    const freePlan =
+      this.splitClient.getTreatment(KEY, 'freePlanEnabled') === 'on';
 
     return {
-      free: freePlan,
+      free: freePlan || undefined,
       startup: true,
       pro: true,
       enterprise: true,
@@ -15,34 +20,32 @@ export class AppService {
   }
 
   getPaymentMethods(storeId?: string): Record<string, boolean> {
-    // check for flag "pixEnabled"
-    const pixEnabled = true;
+    const pixEnabled =
+      this.splitClient.getTreatment(storeId ?? KEY, 'pixEnabled') === 'on';
 
     return {
-      pix: pixEnabled,
+      pix: pixEnabled || undefined,
       creditCard: true,
       slip: true,
     };
   }
 
   getAntiFraudInfo(): Record<string, boolean | string[]> {
-    // check for flag "antiFraudEnabled"
-    const isEnabled = true;
-
-    if (isEnabled) {
+    if (this.splitClient.getTreatment(KEY, 'antiFraudEnabled') !== 'on') {
       return {
         enabled: false,
         engines: null,
       };
     }
 
-    // check for flag/variant "antiFraudEngine" if possible
-    const engines = ['clearsale', 'legiti', 'konduto'];
+    const { treatment, config } = this.splitClient.getTreatmentWithConfig(
+      crypto.createHash('md5').update(Date.now().toString()).digest('hex'),
+      'antiFraudEngine',
+    );
+    const enabled = treatment !== 'off';
+    const { engines } = JSON.parse(config);
 
-    return {
-      enabled: true,
-      engines,
-    };
+    return { enabled, engines };
   }
 
   getFeatures() {
